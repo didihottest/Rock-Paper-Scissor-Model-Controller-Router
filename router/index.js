@@ -5,7 +5,8 @@ const {
   Register,
   Login,
   CreateRoom,
-  PlayGameRoom
+  PlayGameRoom,
+  DeleteUser
 } = require('../controller')
 const verifyToken = require('../middleware/verifyToken')
 
@@ -21,5 +22,7 @@ router.post('/login', Login)
 router.post('/room/create', verifyToken, CreateRoom)
 // route untuk main game
 router.post('/room/play', verifyToken, PlayGameRoom)
+// delete user
+router.delete('/user/:id', DeleteUser)
 
 module.exports = router

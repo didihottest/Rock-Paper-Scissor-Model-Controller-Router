@@ -1,4 +1,4 @@
-const { User, User_History, Room } = require('../models')
+const { User, User_History, Room, sequelize } = require('../models')
 const { Op } = require('sequelize')
 const fs = require('fs')
 const bcrypt = require('bcrypt')
@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken')
 // controller untuk halaman home page
 
 const Register = async (req, res, next) => {
+  const transaction = await sequelize.transaction()
   try {
     // check apakah password dan confirm passwordnya sama
     if (req.body.password1 !== req.body.password2) {
@@ -22,18 +23,24 @@ const Register = async (req, res, next) => {
         email: req.body.email,
         role: req.body.role,
         password: hashedPassword
+      }, {
+        transaction
       })
       // create user history after user created
       await User_History.create({
         user_uuid: newUser.uuid
+      }, {
+        transaction
       })
 
+      await transaction.commit()
       res.json({
         message: "User Created SuccessFully"
       })
 
     }
   } catch (error) {
+    await transaction.rollback()
     console.log('=============REGISTER==================');
     console.log(error);
     console.log('=============REGISTER==================');
@@ -302,10 +309,80 @@ const PlayGameRoom = async (req, res, next) => {
   }
 }
 
+const DeleteUser = async (req, res, next) => {
+  // inisiasi transaction kalau ada error di rollback
+  const transaction = await sequelize.transaction();
+  try {
+    const id = req.params.id
+
+    const userToDelete = await User.findByPk(id)
+
+    if (!userToDelete) {
+      return res.status(404).json({
+        message: "User Not Found"
+      })
+    }
+
+    await Room.destroy({
+      where: {
+        [Op.or]: [
+          {
+            owned_by: userToDelete.uuid
+          },
+          {
+            player_1_uuid: userToDelete.uuid
+          },
+          {
+            player_2_uuid: userToDelete.uuid
+          },
+          {
+            winner_uuid: userToDelete.uuid
+          },
+          {
+            loser_uuid: userToDelete.uuid
+          },
+        ]
+      },
+      transaction
+    })
+
+    await User_History.destroy({
+      where: {
+        user_uuid: userToDelete.uuid
+      },
+      transaction
+    },
+    )
+
+    // console.log(asjdhajksdhajksdhkajsdh)
+    await User.destroy({
+      where: {
+        uuid: userToDelete.uuid
+      },
+      transaction
+    })
+
+    // untuk memberi tahu aplikasi bahwa kita siap untuk
+    // melakukan perubahan sesuai dengan logic diatas
+    await transaction.commit();
+
+    res.json({
+      message: "SUCCESSFULLY DELETED"
+    })
+
+  } catch (error) {
+    // untuk mengembalikan data ke state sebelumnya
+    await transaction.rollback();
+    return res.status(500).json({
+      message: error.message
+    })
+  }
+}
 
 module.exports = {
   Register,
   Login,
   CreateRoom,
-  PlayGameRoom
+  PlayGameRoom,
+  DeleteUser
 }
